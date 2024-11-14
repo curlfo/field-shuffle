@@ -1,3 +1,5 @@
+const process = require('node:process');
+
 const box = [
     [8, 0, 5, 3, 3, 3, 7],
     [5, 0, -1, -1, 0, 3, 1],
@@ -9,72 +11,137 @@ const box = [
 
 const nReels = 7;
 const nRows = 6;
-const nSymbols = 10;
 
-const counts = new Map();
-const vis = Array.from(Array(nRows), () => Array(nReels).fill(false));
-
-const newBox = Array.from(Array(nRows), () => Array(nReels).fill(-1));
-
-box.forEach((row, i) => {
-    row.forEach((el, k) => {
-        if(el >= 0) {
-            if(counts.has(el)) {
-                let amount = counts.get(el);
-                counts.set(el, amount + 1);
-            }
-            else {
-                counts.set(el, 1);
-            }
-        }
-        else {
-            vis[i][k] = true;
-        }
-    });
-});
-
-const sortedArray = Array.from(counts).sort((a, b) => a[1] - b[1]).reverse();
-// const sortedCounts = new Map(sortedArray);
-
-// Direction vectors
+// Direction vectors for BFS
 const dRow = [-1, 0, 1, 0 ];
 const dCol = [0, 1, 0, -1 ];
 
-let nextPos = [2, 3];
-for(let i = 0; i < sortedArray.length; i++) {
+main();
 
-    if(nextPos !== []) {
-        const places = [];
+function main() {
 
-        nextPos = BFS(box, vis, nextPos[0], nextPos[1], places, sortedArray[i][1]);
+    const {counts, checked} = analyseBox(box);
+    const sortedCounts = Array.from(counts).sort((a, b) => a[1] - b[1]).reverse();
 
-        places.forEach(pos => {
-            newBox[pos.row][pos.reel] = sortedArray[i][0];
+    let checkedCopy = checked.map(function (arr) {
+        return arr.slice();
+    });
+    const startPositions = [];
+    BFS(box, checkedCopy, 2, 3, startPositions, nReels * nRows);
+
+    let isAllPlaced = false;
+    const checkedStartPositions = [];
+    let startPosition = getNextPosition(null, checkedStartPositions, startPositions);
+    const newBox = Array.from(Array(nRows), () => Array(nReels).fill(-1));
+
+    while (!isAllPlaced && Object.keys(startPosition).length !== 0) {
+
+        const checkedCopy = checked.map(function (arr) {
+            return arr.slice();
         });
+
+        isAllPlaced = checkStartPoint(startPosition, sortedCounts, box, newBox, checkedCopy);
+        startPosition = getNextPosition(null, checkedStartPositions, startPositions);
     }
+
+    console.log('Box');
+    printBox(box);
+    console.log('\nNew Box');
+    printBox(newBox);
 
 }
 
-// BFS(box, vis, 2, 3);
+function analyseBox(box) {
 
+    const counts = new Map();
+    const checked = Array.from(Array(nRows), () => Array(nReels).fill(false));
 
+    box.forEach((row, i) => {
+        row.forEach((el, k) => {
+            if(el >= 0) {
+                if(counts.has(el)) {
+                    let amount = counts.get(el);
+                    counts.set(el, amount + 1);
+                }
+                else {
+                    counts.set(el, 1);
+                }
+            }
+            else {
+                checked[i][k] = true;
+            }
+        });
+    });
 
-// Function to check if a cell was visited or not
-function isValid(vis, row, col)  {
+    return {counts : counts, checked : checked};
+}
+
+function checkStartPoint(startPoint, counts, box, newBox, checked) {
+
+    let isAllPlaced = true;
+
+    let checkedCopy = checked.map(function(arr) {
+        return arr.slice();
+    });
+    const checkOrder = [];
+    BFS(box, checkedCopy, startPoint.row, startPoint.reel, checkOrder, nReels * nRows);
+
+    for (let i = 0; i < counts.length; i++) {
+
+        const checkedPos = [];
+        let nextPos = getNextPosition(checked, checkedPos, checkOrder);
+
+        let places;
+        let isPlaced = false;
+        while (!isPlaced && Object.keys(nextPos).length !== 0) {
+            places = [];
+            checkedCopy = checked.map(function (arr) {
+                return arr.slice();
+            });
+
+            isPlaced = BFS(box, checkedCopy, nextPos.row, nextPos.reel, places, counts[i][1]);
+            nextPos = getNextPosition(checked, checkedPos, checkOrder);
+        }
+
+        isAllPlaced &= isPlaced;
+
+        places.forEach(pos => {
+            newBox[pos.row][pos.reel] = counts[i][0];
+            checked[pos.row][pos.reel] = true;
+        });
+
+    }
+
+    return isAllPlaced;
+}
+
+function getNextPosition(checked, checkedPos, checkOrder) {
+    for(let i = 0; i < checkOrder.length; i++) {
+        const pos = checkOrder[i];
+        if((!checked || (checked && !checked[pos.row][pos.reel])) && !checkedPos.includes(pos)) {
+            checkedPos.push(pos);
+            return pos;
+        }
+    }
+
+    return {};
+}
+
+function isValid(checked, row, col)  {
     // If cell lies out of bounds
     if (row < 0 || col < 0
         || row >= nRows || col >= nReels)
         return false;
 
     // If cell is already visited
-    if (vis[row][col])
+    if (checked[row][col])
         return false;
 
     // Otherwise
     return true;
 }
 
-function BFS( grid, vis,row, col, places, maxN) {
+function BFS(grid, checked,row, col, places, maxN) {
     // Stores indices of the matrix cells
     const q = [];
 
@@ -82,7 +149,7 @@ function BFS( grid, vis,row, col, places, maxN) {
 
     // Mark the starting cell as visited and push it into the queue
     q.push([row, col]);
-    vis[row][col] = true;
+    checked[row][col] = true;
 
     // Iterate while the queue is not empty
     while (q.length !== 0) {
@@ -91,7 +158,6 @@ function BFS( grid, vis,row, col, places, maxN) {
         const x = cell[0];
         const y = cell[1];
 
-        console.log( grid[x][y] + " ");
         places.push({row : x, reel : y});
 
         q.shift();
@@ -104,18 +170,28 @@ function BFS( grid, vis,row, col, places, maxN) {
             const adjx = x + dRow[i];
             const adjy = y + dCol[i];
 
-            if (isValid(vis, adjx, adjy)) {
+            if (isValid(checked, adjx, adjy)) {
                 q.push([adjx, adjy ]);
-                vis[adjx][adjy] = true;
+                checked[adjx][adjy] = true;
             }
 
             if(checkedN === maxN) {
-                return q[0];
+                return true;
             }
         }
     }
 
-    return [];
+    return false;
+
+}
+
+function printBox(box) {
+    for(let i = 0; i < box.length; i++) {
+        for(let k = 0; k < box[i].length; k++) {
+            process.stdout.write(box[i][k] + ' ');
+        }
+        process.stdout.write('\n');
+    }
 }
 
 console.log();
