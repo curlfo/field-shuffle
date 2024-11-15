@@ -16,12 +16,22 @@ const nRows = 6;
 const dRow = [-1, 0, 1, 0 ];
 const dCol = [0, 1, 0, -1 ];
 
+const threshold = 4;
+
 main();
 
 function main() {
 
     const {counts, checked} = analyseBox(box);
     const sortedCounts = Array.from(counts).sort((a, b) => a[1] - b[1]).reverse();
+
+    const groupedCounts = [];
+    const freeCounts = [];
+
+    for(let i = 0; i < sortedCounts.length; i++) {
+        if(sortedCounts[i][1] >= threshold) groupedCounts.push(sortedCounts[i]);
+        else                                freeCounts.push(sortedCounts[i]);
+    }
 
     let checkedCopy = checked.map(function (arr) {
         return arr.slice();
@@ -40,9 +50,11 @@ function main() {
             return arr.slice();
         });
 
-        isAllPlaced = checkStartPoint(startPosition, sortedCounts, box, newBox, checkedCopy);
+        isAllPlaced = checkStartPoint(startPosition, groupedCounts, box, newBox, checkedCopy);
         startPosition = getNextPosition(null, checkedStartPositions, startPositions);
     }
+
+    placeElementsRandomly(box, newBox, freeCounts);
 
     console.log('Box');
     printBox(box);
@@ -192,6 +204,49 @@ function printBox(box) {
         }
         process.stdout.write('\n');
     }
+}
+
+function shuffle(array) {
+    let currentIndex = array.length;
+
+    // While there remain elements to shuffle...
+    while (currentIndex !== 0) {
+
+        // Pick a remaining element...
+        let randomIndex = Math.floor(Math.random() * currentIndex);
+        currentIndex--;
+
+        // And swap it with the current element.
+        [array[currentIndex], array[randomIndex]] = [
+            array[randomIndex], array[currentIndex]];
+    }
+}
+
+function placeElementsRandomly(box, newBox, counts) {
+
+    const freePositions = getFreePositions(box, newBox);
+    shuffle(freePositions);
+
+    for(let i = 0; i < counts.length; i++) {
+        for(let k = 0; k < counts[i][1]; k++) {
+            const pos = freePositions.pop();
+            newBox[pos.row][pos.reel] = counts[i][0];
+        }
+    }
+
+}
+
+function getFreePositions(box, newBox) {
+    const freePositions = [];
+    for(let i = 0; i < box.length; i++) {
+        for(let k = 0; k < box[i].length; k++) {
+            if(box[i][k] !== -1 && newBox[i][k] === -1) {
+                freePositions.push({row : i, reel : k});
+            }
+        }
+    }
+
+    return freePositions;
 }
 
 console.log();
