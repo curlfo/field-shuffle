@@ -1,12 +1,12 @@
 const process = require('node:process');
 
 const box = [
-    [8, 0, 5, 3, 3, 3, 7],
-    [5, 0, -1, -1, 0, 3, 1],
-    [7, 0, 7, 0, 0, 0, 4],
-    [0, 8, 3, 6, 5, 0, 3],
-    [0, 9, 9, 2, 6, 4, 1],
-    [9, 9, 0, 0, 4, 6, -1]];
+    [-1, -1, 5, 3, 3, 3, 0],
+    [5, 0, -1, -1, 0, 3, 0],
+    [-1, 0, -1, 0, 0, 0, -1],
+    [0, 8, 3, -1, 5, 0, 3],
+    [0, 9, 9, -1, 0, -1, 5],
+    [9, 9, 0, 0, 5, 0, -1]];
 
 
 const nReels = 7;
@@ -25,38 +25,24 @@ function main() {
     const {counts, checked} = analyseBox(box);
     const sortedCounts = Array.from(counts).sort((a, b) => a[1] - b[1]).reverse();
 
-    const groupedCounts = [];
-    const freeCounts = [];
+    const elementsToGroup = [];
+    // const freeCounts = [];
 
     for(let i = 0; i < sortedCounts.length; i++) {
-        if(sortedCounts[i][1] >= threshold) groupedCounts.push(sortedCounts[i]);
-        else                                freeCounts.push(sortedCounts[i]);
+        if(sortedCounts[i][1] >= threshold) elementsToGroup.push(sortedCounts[i]);
+        // else                                freeCounts.push(sortedCounts[i]);
     }
 
-    let checkedCopy = checked.map(function (arr) {
-        return arr.slice();
-    });
-    const startPositions = [];
-    BFS(box, checkedCopy, 2, 3, startPositions, nReels * nRows);
+    const combinations = getPrioritizedCombinations(elementsToGroup);
 
-    let isAllPlaced = false;
-    const checkedStartPositions = [];
-    let startPosition = getNextPosition(null, checkedStartPositions, startPositions);
-    let newBox;
+    let {newBox, winCombination} = groupClusters(checked, elementsToGroup, combinations);
 
-    while (!isAllPlaced && Object.keys(startPosition).length !== 0) {
-
-        newBox = Array.from(Array(nRows), () => Array(nReels).fill(-1));
-        const checkedCopy = checked.map(function (arr) {
-            return arr.slice();
-        });
-
-        isAllPlaced = checkStartPoint(startPosition, groupedCounts, box, newBox, checkedCopy);
-        startPosition = getNextPosition(null, checkedStartPositions, startPositions);
-    }
-
+    const groupedElements = [];
+    winCombination.forEach(id => {
+        groupedElements.push(elementsToGroup[id][0]);
+    })
     // placeElementsRandomly(box, newBox, freeCounts);
-    newBox = fillEmptyPlaces(box, newBox, groupedCounts)
+    newBox = fillEmptyPlaces(box, newBox, groupedElements)
 
     console.log('Box');
     printBox(box);
@@ -90,7 +76,121 @@ function analyseBox(box) {
     return {counts : counts, checked : checked};
 }
 
-function checkStartPoint(startPoint, counts, box, newBox, checked) {
+function getPrioritizedCombinations(elementsToGroup) {
+
+    const arr = [];
+    for(let i = 0; i < elementsToGroup.length; i++) {
+        arr.push([i]);
+    }
+
+    let combinations = getAllCombinations(arr, elementsToGroup.length);
+    combinations = getUniqueCombinations(combinations);
+
+    combinations = combinations.sort((a, b) => {
+        return getCombinationCost(b) - getCombinationCost(a);
+    });
+    combinations = combinations.sort((a, b) => {
+        return b.length - a.length;
+    });
+
+    return combinations;
+}
+
+function getAllCombinations(arr, depth) {
+    if (depth === 1) {
+        return arr;
+    }
+    else {
+        let result = getAllCombinations(arr, depth - 1);
+        result = result.flatMap((val) =>
+            arr.map((char) => {
+                if(val.includes(char[0]))  return null;
+                else                    return [val, char].flat()
+
+            })
+        );
+
+        result = result.filter((val) =>
+            val !== null
+        );
+
+        return arr.concat(result);
+    }
+}
+
+function getUniqueCombinations(result) {
+    result = result.map(arr => arr.sort());
+
+    for(let i = result.length - 1; i >= 0; i--) {
+        for(let k = i - 1; k >= 0; k--) {
+            if(result[i].length === result[k].length) {
+                let isSimilar = true;
+                for(let j = 0; j < result[i].length; j++) {
+                    if(result[i][j] !== result[k][j]) {
+                        isSimilar = false;
+                    }
+                }
+
+                if(isSimilar) {
+                    result.splice(i, 1);
+                    i--;
+                    k = i;
+                }
+            }
+        }
+    }
+
+    return result;
+}
+
+function getCombinationCost(arr) {
+    let cost = 0;
+    arr.forEach(el => {
+        cost += el;
+    });
+
+    return cost;
+}
+
+function groupClusters(checked, elementsToGroup, combinations) {
+
+    let isAllPlaced = false;
+    let combination = combinations.shift();
+    let winCombination;
+    let newBox;
+
+    while(!isAllPlaced && combination) {
+
+        winCombination = combination;
+
+        let checkedCopy = checked.map(function (arr) {
+            return arr.slice();
+        });
+        const startPositions = [];
+        BFS(box, checkedCopy, 2, 3, startPositions, nReels * nRows);
+
+        // const checkedStartPositions = [];
+        let startPosition = startPositions.shift();
+
+        while (!isAllPlaced && startPositions.length !== 0) {
+
+            newBox = Array.from(Array(nRows), () => Array(nReels).fill(-1));
+            const checkedCopy = checked.map(function (arr) {
+                return arr.slice();
+            });
+
+            isAllPlaced = checkStartPoint(startPosition, elementsToGroup, box, newBox, checkedCopy, combination);
+            startPosition = startPositions.shift();
+        }
+
+
+        combination = combinations.shift();
+    }
+
+    return {newBox : newBox, winCombination : winCombination};
+}
+
+function checkStartPoint(startPoint, counts, box, newBox, checked, combination) {
 
     let isAllPlaced = true;
 
@@ -100,7 +200,7 @@ function checkStartPoint(startPoint, counts, box, newBox, checked) {
     const checkOrder = [];
     BFS(box, checkedCopy, startPoint.row, startPoint.reel, checkOrder, nReels * nRows);
 
-    for (let i = 0; i < counts.length; i++) {
+    for (let i = 0; i < combination.length; i++) {
 
         const checkedPos = [];
         let nextPos = getNextPosition(checked, checkedPos, checkOrder);
@@ -113,14 +213,14 @@ function checkStartPoint(startPoint, counts, box, newBox, checked) {
                 return arr.slice();
             });
 
-            isPlaced = BFS(box, checkedCopy, nextPos.row, nextPos.reel, places, counts[i][1]);
+            isPlaced = BFS(box, checkedCopy, nextPos.row, nextPos.reel, places, counts[combination[i]][1]);
             nextPos = getNextPosition(checked, checkedPos, checkOrder);
         }
 
         isAllPlaced &= isPlaced;
 
         places.forEach(pos => {
-            newBox[pos.row][pos.reel] = counts[i][0];
+            newBox[pos.row][pos.reel] = counts[combination[i]][0];
             checked[pos.row][pos.reel] = true;
         });
 
@@ -132,7 +232,7 @@ function checkStartPoint(startPoint, counts, box, newBox, checked) {
 function getNextPosition(checked, checkedPos, checkOrder) {
     for(let i = 0; i < checkOrder.length; i++) {
         const pos = checkOrder[i];
-        if((!checked || (checked && !checked[pos.row][pos.reel])) && !checkedPos.includes(pos)) {
+        if(!checked[pos.row][pos.reel] && !checkedPos.includes(pos)) {
             checkedPos.push(pos);
             return pos;
         }
@@ -251,7 +351,7 @@ function getFreePositions(box, newBox) {
     return freePositions;
 }
 
-function fillEmptyPlaces(box, newBox, groupedCounts) {
+function fillEmptyPlaces(box, newBox, groupedElements) {
 
     let newBoxChecked = newBox.map(function(arr) {
         return arr.slice();
@@ -262,10 +362,10 @@ function fillEmptyPlaces(box, newBox, groupedCounts) {
     });
 
     let isFirst = true;
-    while(isFirst || !isCorrectBox(boxCopy, newBox, groupedCounts)) {
+    while(isFirst || !isCorrectBox(boxCopy, newBox, groupedElements)) {
         {
             isFirst = false;
-            swapInBox(newBox, boxCopy, groupedCounts, newBoxChecked);
+            swapInBox(newBox, boxCopy, groupedElements, newBoxChecked);
         }
 
     }
@@ -277,13 +377,13 @@ function fillEmptyPlaces(box, newBox, groupedCounts) {
     return newBox;
 }
 
-function swapInBox(newBox, boxCopy, groupedCounts, newBoxChecked) {
+function swapInBox(newBox, boxCopy, groupedElements, newBoxChecked) {
     for (let i = 0; i < box.length; i++) {
         for (let k = 0; k < box[i].length; k++) {
             if (newBox[i][k] === -1 || (newBox[i][k] !== -1 && newBox[i][k] !== boxCopy[i][k])) {
                 const boxEl = boxCopy[i][k];
 
-                if (isInCluster(boxEl, groupedCounts)) {
+                if (isInCluster(boxEl, groupedElements)) {
                     const {row, reel} = getPositionToSwap(boxEl, newBoxChecked);
 
                     let tmp = boxCopy[row][reel];
@@ -303,7 +403,7 @@ function swapInBox(newBox, boxCopy, groupedCounts, newBoxChecked) {
 
 function isInCluster(el, counts) {
     for(let i = 0; i < counts.length; i++) {
-        if(el === counts[i][0]) {
+        if(el === counts[i]) {
             return true;
         }
     }
@@ -321,10 +421,10 @@ function getPositionToSwap(el, box) {
     return null;
 }
 
-function isCorrectBox(box, newBox, groupedCounts) {
+function isCorrectBox(box, newBox, groupedElements) {
     for(let i = 0; i < box.length; i++) {
         for (let k = 0; k < box[i].length; k++) {
-            if((newBox[i][k] === -1 && isInCluster(box[i][k], groupedCounts) || (newBox[i][k] !== -1 && newBox[i][k] !== box[i][k]))) {
+            if((newBox[i][k] === -1 && isInCluster(box[i][k], groupedElements) || (newBox[i][k] !== -1 && newBox[i][k] !== box[i][k]))) {
                 return false;
             }
         }
