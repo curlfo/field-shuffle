@@ -42,10 +42,11 @@ function main() {
     let isAllPlaced = false;
     const checkedStartPositions = [];
     let startPosition = getNextPosition(null, checkedStartPositions, startPositions);
-    const newBox = Array.from(Array(nRows), () => Array(nReels).fill(-1));
+    let newBox;
 
     while (!isAllPlaced && Object.keys(startPosition).length !== 0) {
 
+        newBox = Array.from(Array(nRows), () => Array(nReels).fill(-1));
         const checkedCopy = checked.map(function (arr) {
             return arr.slice();
         });
@@ -54,7 +55,8 @@ function main() {
         startPosition = getNextPosition(null, checkedStartPositions, startPositions);
     }
 
-    placeElementsRandomly(box, newBox, freeCounts);
+    // placeElementsRandomly(box, newBox, freeCounts);
+    newBox = fillEmptyPlaces(box, newBox, groupedCounts)
 
     console.log('Box');
     printBox(box);
@@ -247,6 +249,87 @@ function getFreePositions(box, newBox) {
     }
 
     return freePositions;
+}
+
+function fillEmptyPlaces(box, newBox, groupedCounts) {
+
+    let newBoxChecked = newBox.map(function(arr) {
+        return arr.slice();
+    });
+
+    const boxCopy = box.map(function(arr) {
+        return arr.slice();
+    });
+
+    let isFirst = true;
+    while(isFirst || !isCorrectBox(boxCopy, newBox, groupedCounts)) {
+        {
+            isFirst = false;
+            swapInBox(newBox, boxCopy, groupedCounts, newBoxChecked);
+        }
+
+    }
+
+    newBox = boxCopy.map(function(arr) {
+        return arr.slice();
+    });
+
+    return newBox;
+}
+
+function swapInBox(newBox, boxCopy, groupedCounts, newBoxChecked) {
+    for (let i = 0; i < box.length; i++) {
+        for (let k = 0; k < box[i].length; k++) {
+            if (newBox[i][k] === -1 || (newBox[i][k] !== -1 && newBox[i][k] !== boxCopy[i][k])) {
+                const boxEl = boxCopy[i][k];
+
+                if (isInCluster(boxEl, groupedCounts)) {
+                    const {row, reel} = getPositionToSwap(boxEl, newBoxChecked);
+
+                    let tmp = boxCopy[row][reel];
+                    boxCopy[row][reel] = boxCopy[i][k];
+                    boxCopy[i][k] = tmp;
+                    newBoxChecked[row][reel] = -1;
+                } else {
+                    boxCopy[i][k] = boxEl;
+                }
+            }
+            else if(newBox[i][k] === boxCopy[i][k]) {
+                newBoxChecked[i][k] = -1;
+            }
+        }
+    }
+}
+
+function isInCluster(el, counts) {
+    for(let i = 0; i < counts.length; i++) {
+        if(el === counts[i][0]) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+function getPositionToSwap(el, box) {
+    for(let i = 0; i < box.length; i++) {
+        for (let k = 0; k < box[i].length; k++) {
+            if(el === box[i][k])    return {row : i, reel : k};
+        }
+    }
+
+    return null;
+}
+
+function isCorrectBox(box, newBox, groupedCounts) {
+    for(let i = 0; i < box.length; i++) {
+        for (let k = 0; k < box[i].length; k++) {
+            if((newBox[i][k] === -1 && isInCluster(box[i][k], groupedCounts) || (newBox[i][k] !== -1 && newBox[i][k] !== box[i][k]))) {
+                return false;
+            }
+        }
+    }
+    return true;
 }
 
 console.log();
