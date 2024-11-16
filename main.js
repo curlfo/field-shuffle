@@ -87,10 +87,13 @@ function getPrioritizedCombinations(elementsToGroup) {
     combinations = getUniqueCombinations(combinations);
 
     combinations = combinations.sort((a, b) => {
-        return getCombinationCost(b) - getCombinationCost(a);
-    });
-    combinations = combinations.sort((a, b) => {
         return b.length - a.length;
+    });
+
+    combinations = combinations.sort((a, b) => {
+        if(b.length === a.length) {
+            return getCombinationCost(a) - getCombinationCost(b);
+        }
     });
 
     return combinations;
@@ -302,7 +305,12 @@ function BFS(grid, checked,row, col, places, maxN) {
 function printBox(box) {
     for(let i = 0; i < box.length; i++) {
         for(let k = 0; k < box[i].length; k++) {
-            process.stdout.write(box[i][k] + ' ');
+            if(box[i][k] === -1) {
+                process.stdout.write('x ');
+            }
+            else {
+                process.stdout.write(box[i][k] + ' ');
+            }
         }
         process.stdout.write('\n');
     }
